@@ -63,9 +63,11 @@ def stream_head():
                 if clients_head[client_name][2] <= -ttl_tolerance:
                     delete_list.append(client_name)
                 if clients_head[client_name][2] <= 0:
-                    myself.sendto(pickle.dumps({'info': 'refresh_req', 'name': client_name}), clients_head[client_name][0])
+                    myself.sendto(pickle.dumps({'info': 'refresh_req', 'name': client_name}),
+                                  clients_head[client_name][0])
             for client_name in delete_list:
-                myself.sendto(pickle.dumps({'info': 'client_delete', 'name': client_name}), clients_head[client_name][0])
+                myself.sendto(pickle.dumps({'info': 'client_delete', 'name': client_name}),
+                              clients_head[client_name][0])
                 del clients_head[client_name]
                 del client_modes[client_name]
 
@@ -75,8 +77,10 @@ def stream_head():
 
         for client_name in copy(clients_head).keys():
             if tx.get('type') in clients_head[client_name][1]:
-                log_head.log(15, 'Sending {} to "{}" ({!s})'.format(tx.get('type'), client_name, clients_head[client_name][2]))
-                myself.sendto(pickle.dumps({'data': tx, 'name': client_name, 'info': 'stream_data'}), clients_head[client_name][0])
+                log_head.log(15, 'Sending {} to "{}" ({!s})'.format(tx.get('type'), client_name,
+                                                                    clients_head[client_name][2]))
+                myself.sendto(pickle.dumps({'data': tx, 'name': client_name, 'info': 'stream_data'}),
+                              clients_head[client_name][0])
 
 
 def stream_irreversible():
@@ -95,9 +99,11 @@ def stream_irreversible():
                 if clients_irreversible[client_name][2] <= -ttl_tolerance:
                     delete_list.append(client_name)
                 if clients_irreversible[client_name][2] <= 0:
-                    myself.sendto(pickle.dumps({'info': 'refresh_req', 'name': client_name}), clients_irreversible[client_name][0])
+                    myself.sendto(pickle.dumps({'info': 'refresh_req', 'name': client_name}),
+                                  clients_irreversible[client_name][0])
             for client_name in delete_list:
-                myself.sendto(pickle.dumps({'info': 'client_delete', 'name': client_name}), clients_irreversible[client_name][0])
+                myself.sendto(pickle.dumps({'info': 'client_delete', 'name': client_name}),
+                              clients_irreversible[client_name][0])
                 del clients_irreversible[client_name]
                 del client_modes[client_name]
             if not len(clients_irreversible):
@@ -106,107 +112,129 @@ def stream_irreversible():
 
         for client_name in copy(clients_irreversible).keys():
             if tx.get('type') in clients_irreversible[client_name][1]:
-                log_irre.log(15, 'Sending {} to "{}" ({!s})'.format(tx.get('type'), client_name, clients_irreversible[client_name][2]))
-                myself.sendto(pickle.dumps({'data': tx, 'name': client_name, 'info': 'stream_data'}), clients_irreversible[client_name][0])
+                log_irre.log(15, 'Sending {} to "{}" ({!s})'.format(tx.get('type'), client_name,
+                                                                    clients_irreversible[client_name][2]))
+                myself.sendto(pickle.dumps({'data': tx, 'name': client_name, 'info': 'stream_data'}),
+                              clients_irreversible[client_name][0])
 
 
-def execute_cmd(data, address):
-    log_main.debug(data)
-    if data.get('command'):
-        if data['command'] == 'register' and data.get('name') and data.get('mode') in ['head', 'irreversible']:
-            if data['name'] in client_modes:
-                myself.sendto(pickle.dumps({'info': 'error', 'data': 'name already used'}), address)
-                log_main.info('Registration failed since name is already in use. ({})'.format(data['name']))
+def execute_cmd(data_, address_):
+    log_main.debug(data_)
+    if data_.get('command'):
+        if data_['command'] == 'register' and data_.get('name') and data_.get('mode') in ['head', 'irreversible']:
+            if data_['name'] in client_modes:
+                myself.sendto(pickle.dumps({'info': 'error', 'data': 'name already used'}), address_)
+                log_main.info('Registration failed since name is already in use. ({})'.format(data_['name']))
                 return
-            if data['mode'] == 'head' and config.getboolean('PROXY_SETTINGS', 'enable_head', fallback=True):
-                clients_head[data['name']] = [address, [], standard_ttl]
-                log_main.info('Registration to head mode with name "{}" successful.'.format(data['name']))
+            if data_['mode'] == 'head' and config.getboolean('PROXY_SETTINGS', 'enable_head',
+                                                             fallback=True):
+                clients_head[data_['name']] = [address_, [], standard_ttl]
+                log_main.info('Registration to head mode with name "{}" successful.'.format(data_['name']))
                 if not [True for x in threading.enumerate() if x.name == 'head_thread']:
                     threading.Thread(target=stream_head, name='head_thread').start()
-            elif data['mode'] == 'irreversible' and config.getboolean('PROXY_SETTINGS', 'enable_irreversible', fallback=True):
-                clients_irreversible[data['name']] = [address, [], standard_ttl]
-                log_main.info('Registration to irreversible mode with name {} successful.'.format(data['name']))
+            elif data_['mode'] == 'irreversible' and config.getboolean('PROXY_SETTINGS', 'enable_irreversible',
+                                                                       fallback=True):
+                clients_irreversible[data_['name']] = [address_, [], standard_ttl]
+                log_main.info('Registration to irreversible mode with name {} successful.'.format(data_['name']))
                 if not [True for x in threading.enumerate() if x.name == 'irreversible_thread']:
                     threading.Thread(target=stream_irreversible, name='irreversible_thread').start()
             else:
-                myself.sendto(pickle.dumps({'info': 'error', 'data': 'mode not provided on the server'}), address)
-                log_main.info('Registration failed since mode "{}" is not provided on the server.'.format(data['mode']))
+                myself.sendto(pickle.dumps({'info': 'error', 'data': 'mode not provided on the server'}), address_)
+                log_main.info('Registration failed since mode "{}" is not provided on server.'.format(data_['mode']))
                 return
-            client_modes[data['name']] = data['mode']
+            client_modes[data_['name']] = data_['mode']
 
-        elif data['command'] == 'unregister' and data.get('name') in client_modes:
-            if client_modes[data['name']] == 'head':
-                myself.sendto(pickle.dumps({'info': 'client_delete', 'name': data['name']}), clients_head[data['name']][0])
-                del clients_head[data['name']]
-            elif client_modes[data['name']] == 'irreversible':
-                myself.sendto(pickle.dumps({'info': 'client_delete', 'name': data['name']}), clients_irreversible[data['name']][0])
-                del clients_irreversible[data['name']]
-            del client_modes[data['name']]
-            log_main.info('Deleted client "{}" from registration.'.format(data['name']))
+        elif data_['command'] == 'unregister' and data_.get('name') in client_modes:
+            if client_modes[data_['name']] == 'head':
+                myself.sendto(pickle.dumps({'info': 'client_delete', 'name': data_['name']}),
+                              clients_head[data_['name']][0])
+                del clients_head[data_['name']]
+            elif client_modes[data_['name']] == 'irreversible':
+                myself.sendto(pickle.dumps({'info': 'client_delete', 'name': data_['name']}),
+                              clients_irreversible[data_['name']][0])
+                del clients_irreversible[data_['name']]
+            del client_modes[data_['name']]
+            log_main.info('Deleted client "{}" from registration.'.format(data_['name']))
 
-        elif data['command'] == 'refresh' and data.get('name') in client_modes:
-            if client_modes[data['name']] == 'head':
-                clients_head[data['name']][2] = standard_ttl
-            elif client_modes[data['name']] == 'irreversible':
-                clients_irreversible[data['name']][2] = standard_ttl
-            log_main.debug('Refreshed connection with client "{}".'.format(data['name']))
+        elif data_['command'] == 'refresh' and data_.get('name') in client_modes:
+            if client_modes[data_['name']] == 'head':
+                clients_head[data_['name']][2] = standard_ttl
+            elif client_modes[data_['name']] == 'irreversible':
+                clients_irreversible[data_['name']][2] = standard_ttl
+            log_main.debug('Refreshed connection with client "{}".'.format(data_['name']))
 
-        elif data['command'] == 'set_subs' and data.get('name') in client_modes and data.get('subs'):
-            if client_modes[data['name']] == 'head':
-                clients_head[data['name']][1] = data['subs']
-            elif client_modes[data['name']] == 'irreversible':
-                clients_irreversible[data['name']][1] = data['subs']
-            log_main.info('Set subs of client "{}" to {!s}.'.format(data['name'], data['subs']))
+        elif data_['command'] == 'set_subs' and data_.get('name') in client_modes and data_.get('subs'):
+            if client_modes[data_['name']] == 'head':
+                clients_head[data_['name']][1] = data_['subs']
+            elif client_modes[data_['name']] == 'irreversible':
+                clients_irreversible[data_['name']][1] = data_['subs']
+            log_main.info('Set subs of client "{}" to {!s}.'.format(data_['name'], data_['subs']))
 
-        elif data['command'] == 'add_subs' and data.get('name') in client_modes and data.get('subs'):
-            if client_modes[data['name']] == 'head':
-                [clients_head[data['name']][1].append(x) for x in data['subs'] if x not in clients_head[data['name']][1]]
-                log_main.info('Added subs of client "{}" -> {!s}.'.format(data['name'], clients_head[data['name']][1]))
-            elif client_modes[data['name']] == 'irreversible':
-                [clients_irreversible[data['name']][1].append(x) for x in data['subs'] if x not in clients_irreversible[data['name']][1]]
-                log_main.info('Added subs of client "{}" -> {!s}.'.format(data['name'], clients_irreversible[data['name']][1]))
+        elif data_['command'] == 'add_subs' and data_.get('name') in client_modes and data_.get('subs'):
+            if client_modes[data_['name']] == 'head':
+                [clients_head[data_['name']][1].append(x) for x in data_['subs']
+                 if x not in clients_head[data_['name']][1]]
+                log_main.info('Added subs of client "{}" -> {!s}.'.format(data_['name'],
+                                                                          clients_head[data_['name']][1]))
+            elif client_modes[data_['name']] == 'irreversible':
+                [clients_irreversible[data_['name']][1].append(x) for x in data_['subs']
+                 if x not in clients_irreversible[data_['name']][1]]
+                log_main.info('Added subs of client "{}" -> {!s}.'.format(data_['name'],
+                                                                          clients_irreversible[data_['name']][1]))
 
-        elif data['command'] == 'rem_subs' and data.get('name') in client_modes and data.get('subs'):
-            if client_modes[data['name']] == 'head':
-                [clients_head[data['name']][1].remove(x) for x in data['subs'] if x in clients_head[data['name']][1]]
-                log_main.info('Removed subs of client "{}" -> {!s}.'.format(data['name'], clients_head[data['name']][1]))
-            elif client_modes[data['name']] == 'irreversible':
-                [clients_irreversible[data['name']][1].remove(x) for x in data['subs'] if x in clients_irreversible[data['name']][1]]
-                log_main.info('Removed subs of client "{}" -> {!s}.'.format(data['name'], clients_irreversible[data['name']][1]))
+        elif data_['command'] == 'rem_subs' and data_.get('name') in client_modes and data_.get('subs'):
+            if client_modes[data_['name']] == 'head':
+                [clients_head[data_['name']][1].remove(x) for x in data_['subs']
+                 if x in clients_head[data_['name']][1]]
+                log_main.info('Removed subs of client "{}" -> {!s}.'.format(data_['name'],
+                                                                            clients_head[data_['name']][1]))
+            elif client_modes[data_['name']] == 'irreversible':
+                [clients_irreversible[data_['name']][1].remove(x) for x in data_['subs']
+                 if x in clients_irreversible[data_['name']][1]]
+                log_main.info('Removed subs of client "{}" -> {!s}.'.format(data_['name'],
+                                                                            clients_irreversible[data_['name']][1]))
 
-        elif data['command'] == 'info' and data.get('name') in client_modes:
-            if client_modes[data['name']] == 'head':
-                myself.sendto(pickle.dumps({'name': data['name'], 'info': 'client_info', 'data': clients_head[data['name']]}), clients_head[data['name']][0])
+        elif data_['command'] == 'info' and data_.get('name') in client_modes:
+            if client_modes[data_['name']] == 'head':
+                myself.sendto(pickle.dumps(
+                    {'name': data_['name'], 'info': 'client_info', 'data': clients_head[data_['name']]}),
+                    clients_head[data_['name']][0])
             else:
-                myself.sendto(pickle.dumps({'name': data['name'], 'info': 'client_info', 'data': clients_irreversible[data['name']]}), clients_irreversible[data['name']][0])
-            log_main.info('Sent info of client "{}".'.format(data['name']))
+                myself.sendto(pickle.dumps(
+                    {'name': data_['name'], 'info': 'client_info', 'data': clients_irreversible[data_['name']]}),
+                    clients_irreversible[data_['name']][0])
+            log_main.info('Sent info of client "{}".'.format(data_['name']))
 
-        elif data['command'] == 'stop':
-            [myself.sendto(pickle.dumps({'info': 'stop', 'name': client}), clients_head[client][0]) for client in clients_head]
-            [myself.sendto(pickle.dumps({'info': 'stop', 'name': client}), clients_irreversible[client][0]) for client in clients_irreversible]
+        elif data_['command'] == 'stop':
+            [myself.sendto(pickle.dumps({'info': 'stop', 'name': client}), clients_head[client][0])
+             for client in clients_head]
+            [myself.sendto(pickle.dumps({'info': 'stop', 'name': client}), clients_irreversible[client][0])
+             for client in clients_irreversible]
             global running
             running = False
 
-        elif data['command'] == 'ping':
-            if data.get('name') in client_modes:
-                if client_modes[data['name']] == 'head':
-                    myself.sendto(pickle.dumps({'info': 'ping_answer', 'name': data['name']}), clients_head[data['name']][0])
+        elif data_['command'] == 'ping':
+            if data_.get('name') in client_modes:
+                if client_modes[data_['name']] == 'head':
+                    myself.sendto(pickle.dumps({'info': 'ping_answer', 'name': data_['name']}),
+                                  clients_head[data_['name']][0])
                 else:
-                    myself.sendto(pickle.dumps({'info': 'ping_answer', 'name': data['name']}), clients_irreversible[data['name']][0])
-                log_main.info('Sent pong to client "{}".'.format(data['name']))
+                    myself.sendto(pickle.dumps({'info': 'ping_answer', 'name': data_['name']}),
+                                  clients_irreversible[data_['name']][0])
+                log_main.info('Sent pong to client "{}".'.format(data_['name']))
             else:
-                myself.sendto(pickle.dumps({'info': 'ping_answer'}), address)
+                myself.sendto(pickle.dumps({'info': 'ping_answer'}), address_)
                 log_main.info('Sent pong to unknown client.')
 
-        elif data['command'] == 'is_registered':
-            if data.get('name') in client_modes:
-                myself.sendto(pickle.dumps({'info': 'registered', 'data': True}), address)
+        elif data_['command'] == 'is_registered':
+            if data_.get('name') in client_modes:
+                myself.sendto(pickle.dumps({'info': 'registered', 'data': True}), address_)
             else:
-                myself.sendto(pickle.dumps({'info': 'registered', 'data': False}), address)
+                myself.sendto(pickle.dumps({'info': 'registered', 'data': False}), address_)
             log_main.info('Sent registration answer to unknown client.')
 
         else:
-            log_main.error('unknown command ({})'.format(data['command']))
+            log_main.error('unknown command ({})'.format(data_['command']))
     else:
         log_main.error('need command')
 

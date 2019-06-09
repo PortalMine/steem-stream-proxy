@@ -5,11 +5,14 @@ import pickle
 
 
 class StreamProxyClient:
-    def __init__(self, name: str, mode: str, server_address: tuple, subs: list = None, log_level: int = None, log_level_listen: int = None):
+    def __init__(self, name: str, mode: str, server_address: tuple, subs: list = None,
+                 log_level: int = None, log_level_listen: int = None):
         if mode not in ['head', 'irreversible']:
             raise ValueError('mode must be either \'head\' or \'irreversible\'')
 
         self.log = logging.getLogger('Client-{}'.format(name))
+        self.thread_log = logging.getLogger('Client-{}-listening_thread'.format(self.name))
+        self.generator_log = logging.getLogger('Client-{}-listening_thread'.format(self.name))
         if log_level:
             if log_level == 'ALL':
                 log_level = 0
@@ -25,7 +28,6 @@ class StreamProxyClient:
         self.myself_send = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
         self.myself_send.settimeout(10)
         self.myself_recv = socket.socket(socket.AF_INET, socket.SOCK_DGRAM)
-        self.myself_recv.settimeout(30)  # set timeout for receiving messages from server (used to determine whether the server is still online)
 
         self.address_server = server_address
         self.name = name
@@ -46,30 +48,36 @@ class StreamProxyClient:
         if subs:
             self.subs = subs
         self.log.info('Setting subscriptions on server side: {!s}'.format(self.subs))
-        self.myself_send.sendto(pickle.dumps({'command': 'set_subs', 'name': self.name, 'subs': subs}), self.address_server)
+        self.myself_send.sendto(pickle.dumps({'command': 'set_subs', 'name': self.name, 'subs': subs}),
+                                self.address_server)
 
     def add_subscriptions(self, subs: list):
-        self.myself_send.sendto(pickle.dumps({'command': 'add_subs', 'name': self.name, 'subs': subs}), self.address_server)
+        self.myself_send.sendto(pickle.dumps({'command': 'add_subs', 'name': self.name, 'subs': subs}),
+                                self.address_server)
         [self.subs.append(x) for x in subs if x not in self.subs]
         self.log.info('Adding subscriptions on server side to: {!s}'.format(self.subs))
 
     def rem_subscriptions(self, subs: list):
-        self.myself_send.sendto(pickle.dumps({'command': 'rem_subs', 'name': self.name, 'subs': subs}), self.address_server)
+        self.myself_send.sendto(pickle.dumps({'command': 'rem_subs', 'name': self.name, 'subs': subs}),
+                                self.address_server)
         [self.subs.remove(x) for x in subs if x in self.subs]
         self.log.info('Removing subscriptions on server side to: {!s}'.format(self.subs))
 
     def get_info(self):
         if self.running:
-            self.myself_send.sendto(pickle.dumps({'command': 'info', 'name': self.name}), self.address_server)
+            self.myself_send.sendto(pickle.dumps({'command': 'info', 'name': self.name}),
+                                    self.address_server)
         else:
             self.log.info('Could not ask for client info since not connected to server.')
 
     def refresh(self):
-        self.myself_send.sendto(pickle.dumps({'command': 'refresh', 'name': self.name}), self.address_server)
+        self.myself_send.sendto(pickle.dumps({'command': 'refresh', 'name': self.name}),
+                                self.address_server)
         self.log.info('Refreshed connection.')
 
     def ping(self):
-        self.myself_send.sendto(pickle.dumps({'command': 'ping', 'name': self.name}), self.address_server)
+        self.myself_send.sendto(pickle.dumps({'command': 'ping', 'name': self.name}),
+                                self.address_server)
         self.log.info('Sending ping.')
         if not self.running:
             try:
@@ -124,7 +132,8 @@ class StreamProxyClient:
             self.log.info('Already paused.')
         elif self.running:
             self.myself_recv.settimeout(None)
-            self.myself_send.sendto(pickle.dumps({'command': 'unregister', 'name': self.name}), self.address_server)
+            self.myself_send.sendto(pickle.dumps({'command': 'unregister', 'name': self.name}),
+                                    self.address_server)
             self.paused = True
             self.log.info('Paused streaming.')
         else:
@@ -145,7 +154,8 @@ class StreamProxyClient:
             self.log.info('Not running.')
 
     def _listen_thread(self):
-        self.thread_log = logging.getLogger('Client-{}-listening_thread'.format(self.name))
+        self.myself_recv.settimeout(30)  # set timeout for receiving messages from server
+
         if self.log_level_listen:
             if self.log_level_listen == 'ALL':
                 self.log_level_listen = 0
@@ -164,7 +174,8 @@ class StreamProxyClient:
             ), self.address_server)
         else:
             self.thread_log.info('Subscribing mode "{}" without subs.'.format(self.mode))
-            self.myself_recv.sendto(pickle.dumps({'command': 'register', 'mode': self.mode, 'name': self.name}), self.address_server)
+            self.myself_recv.sendto(pickle.dumps({'command': 'register', 'mode': self.mode, 'name': self.name}),
+                                    self.address_server)
 
         while self.running:
             try:
@@ -180,7 +191,7 @@ class StreamProxyClient:
                         if self.callable_chain_data:
                             self.callable_chain_data(data.get('data'))
                         self.thread_log.log(5, 'Received stream data: {}'.format(data.get('data')))
-                    elif data['info'] == 'client_info' and isinstance(data.get('data'), list):  # got requested client info
+                    elif data['info'] == 'client_info' and isinstance(data.get('data'), list):  # requested client info
                         if self.callable_client_info:
                             self.callable_client_info(data.get('data'))
                         self.thread_log.info('Received client info data: {}'.format(data.get('data')))
@@ -191,7 +202,8 @@ class StreamProxyClient:
                         self.thread_log.error('Received error message: {}.'.format(data.get('data')))
 
                     elif data['info'] == 'refresh_req':
-                        self.myself_send.sendto(pickle.dumps([{'command': 'refresh', 'name': self.name}]), self.address_server)
+                        self.myself_send.sendto(pickle.dumps([{'command': 'refresh', 'name': self.name}]),
+                                                self.address_server)
                         self.thread_log.debug('Refreshed subscription.')
 
                     elif data['info'] == 'client_delete':
@@ -215,7 +227,8 @@ class StreamProxyClient:
                 self.thread_log.error('connection refused. Server offline.')
                 return 2
             except socket.timeout:
-                self.myself_send.sendto(pickle.dumps({'command': 'is_registered', 'name': self.name}), self.address_server)
+                self.myself_send.sendto(pickle.dumps({'command': 'is_registered', 'name': self.name}),
+                                        self.address_server)
                 try:
                     response = pickle.loads(self.myself_send.recvfrom(512))
                     if response.get('info') == 'registered' and response.get('data'):
@@ -231,7 +244,8 @@ class StreamProxyClient:
                     self.thread_log.error('connection refused. Server offline.')
                     return 2
                 except socket.timeout:
-                    self.myself_send.sendto(pickle.dumps({'command': 'ping'}), self.address_server)
+                    self.myself_send.sendto(pickle.dumps({'command': 'ping'}),
+                                            self.address_server)
                     try:
                         response = pickle.loads(self.myself_send.recvfrom(512))
                         if response.get('info') == 'ping_answer':
@@ -244,75 +258,66 @@ class StreamProxyClient:
                         return 2
 
         if not self.paused:
-            self.myself_send.sendto(pickle.dumps({'command': 'unregister', 'name': self.name}), self.address_server)
+            self.myself_send.sendto(pickle.dumps({'command': 'unregister', 'name': self.name}),
+                                    self.address_server)
         else:
             self.paused = False
 
     def stream(self):
         self.running = True
         self.paused = False
-        self.myself_recv.settimeout(None)  # set timeout for receiving messages from server (used to determine whether the server is still online)
+        self.myself_recv.settimeout(None)  # set to blocking mode
 
-        self.genrator_log = logging.getLogger('Client-{}-listening_thread'.format(self.name))
         if self.log_level_listen:
             if self.log_level_listen == 'ALL':
                 self.log_level_listen = 0
             elif self.log_level_listen == 'NORMAL':
                 self.log_level_listen = 15
-            self.genrator_log.setLevel(self.log_level_listen)
+            self.generator_log.setLevel(self.log_level_listen)
         else:
-            self.genrator_log.setLevel('INFO')
-        self.genrator_log.info('Listening thread created.')
+            self.generator_log.setLevel('INFO')
+        self.generator_log.info('Listening thread created.')
 
         if self.subs:
-            self.genrator_log.info('Subscribing mode "{}" with subs {!s}.'.format(self.mode, self.subs))
+            self.generator_log.info('Subscribing mode "{}" with subs {!s}.'.format(self.mode, self.subs))
             self.myself_recv.sendto(pickle.dumps(
                 [{'command': 'register', 'mode': self.mode, 'name': self.name},
                  {'command': 'set_subs', 'subs': self.subs, 'name': self.name}]
             ), self.address_server)
         else:
-            self.genrator_log.info('Subscribing mode "{}" without subs.'.format(self.mode))
-            self.myself_recv.sendto(pickle.dumps({'command': 'register', 'mode': self.mode, 'name': self.name}), self.address_server)
+            self.generator_log.info('Subscribing mode "{}" without subs.'.format(self.mode))
+            self.myself_recv.sendto(pickle.dumps({'command': 'register', 'mode': self.mode, 'name': self.name}),
+                                    self.address_server)
 
         while self.running:
             data, address = self.myself_recv.recvfrom(65536)
             data = pickle.loads(data)
-            self.genrator_log.log(5, data)
+            self.generator_log.log(5, data)
             if data['info'] == 'stream_data' and isinstance(data.get('data'), dict):  # got block chain data
-                self.genrator_log.log(5, 'Received stream data: {}'.format(data.get('data')))
+                self.generator_log.log(5, 'Received stream data: {}'.format(data.get('data')))
                 yield data.get('data')
 
             elif data['info'] == 'client_info' and isinstance(data.get('data'), list):  # got requested client info
-                if self.callable_client_info:
-                    self.callable_client_info(data.get('data'))
-                self.genrator_log.info('Received client info data: {}'.format(data.get('data')))
+                self.generator_log.info('Received client info data: {}'.format(data.get('data')))
 
             elif data['info'] == 'error' and isinstance(data.get('data'), str):  # error in server
-                if self.callable_error:
-                    self.callable_error(data.get('data'))
-                self.genrator_log.error('Received error message: {}.'.format(data.get('data')))
+                self.generator_log.error('Received error message: {}.'.format(data.get('data')))
 
             elif data['info'] == 'refresh_req':
-                self.myself_send.sendto(pickle.dumps([{'command': 'refresh', 'name': self.name}]), self.address_server)
-                self.genrator_log.debug('Refreshed subscription.')
+                self.myself_send.sendto(pickle.dumps([{'command': 'refresh', 'name': self.name}]),
+                                        self.address_server)
+                self.generator_log.debug('Refreshed subscription.')
 
             elif data['info'] == 'client_delete':
-                if self.callable_client_delete:
-                    self.callable_client_delete()
-                    self.genrator_log.info('Client was deleted from server.')
+                self.generator_log.info('Client was deleted from server.')
                 self.running = False
 
             elif data['info'] == 'stop':
-                if self.callable_server_stopped:
-                    self.callable_server_stopped()
-                self.genrator_log.info('Server shut down.')
+                self.generator_log.info('Server shut down.')
                 self.running = False
 
             elif data['info'] == 'ping_answer':
-                if self.callable_pong:
-                    self.callable_pong()
-                self.genrator_log.info('Received pong.')
+                self.generator_log.info('Received pong.')
 
         self.running = False
         self.paused = False
-
