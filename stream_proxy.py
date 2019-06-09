@@ -30,9 +30,9 @@ logging.basicConfig(level=config.get('LOGGING', 'logging_level_main', fallback='
                     handlers=handlers)
 del handlers
 
-log_main = logging.getLogger('StreamProxyServer_main')
-log_head = logging.getLogger('StreamProxyServer_head')
-log_irre = logging.getLogger('StreamProxyServer_irre')
+log_main = logging.getLogger('StreamProxy_main')
+log_head = logging.getLogger('StreamProxy_head')
+log_irre = logging.getLogger('StreamProxy_irre')
 log_level = config.get('LOGGING', 'log_level', fallback='INFO').upper()
 if log_level == 'ALL':
     log_level = 0
@@ -119,12 +119,12 @@ def execute_cmd(data, address):
                 log_main.info('Registration failed since name is already in use. ({})'.format(data['name']))
                 return
             if data['mode'] == 'head' and config.getboolean('PROXY_SETTINGS', 'enable_head', fallback=True):
-                clients_head[data['name']] = [address, data['mode'], standard_ttl]
-                log_main.info('Registration to head mode with name {} successful.'.format(data['name']))
+                clients_head[data['name']] = [address, [], standard_ttl]
+                log_main.info('Registration to head mode with name "{}" successful.'.format(data['name']))
                 if not [True for x in threading.enumerate() if x.name == 'head_thread']:
                     threading.Thread(target=stream_head, name='head_thread').start()
-            elif data['mode'] == 'irreversible' and config.getboolean('PROXY_SETTINGS', 'enable_irreversible', fallback=False):
-                clients_irreversible[data['name']] = [address, data['mode'], standard_ttl]
+            elif data['mode'] == 'irreversible' and config.getboolean('PROXY_SETTINGS', 'enable_irreversible', fallback=True):
+                clients_irreversible[data['name']] = [address, [], standard_ttl]
                 log_main.info('Registration to irreversible mode with name {} successful.'.format(data['name']))
                 if not [True for x in threading.enumerate() if x.name == 'irreversible_thread']:
                     threading.Thread(target=stream_irreversible, name='irreversible_thread').start()
@@ -198,8 +198,15 @@ def execute_cmd(data, address):
                 myself.sendto(pickle.dumps({'info': 'ping_answer'}), address)
                 log_main.info('Sent pong to unknown client.')
 
+        elif data['command'] == 'is_registered':
+            if data.get('name') in client_modes:
+                myself.sendto(pickle.dumps({'info': 'registered', 'data': True}), address)
+            else:
+                myself.sendto(pickle.dumps({'info': 'registered', 'data': False}), address)
+            log_main.info('Sent registration answer to unknown client.')
+
         else:
-            log_main.error('unknown command')
+            log_main.error('unknown command ({})'.format(data['command']))
     else:
         log_main.error('need command')
 
@@ -221,7 +228,8 @@ while running:
     log_main.log(5, data_list)
     if isinstance(data_list, list):
         for data in data_list:
-            execute_cmd(data, address)
+            if isinstance(data, dict):
+                execute_cmd(data, address)
     elif isinstance(data_list, dict):
         execute_cmd(data_list, address)
 
